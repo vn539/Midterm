@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="A layout example that shows off a responsive pricing table.">
+    <title>Tour Route Buddy &ndash; better touring experience</title>
+	<link rel="stylesheet" href="http://yui.yahooapis.com/pure/0.4.2/pure.css">
+    <!--[if lte IE 8]>
+        <link rel="stylesheet" href="css/main-grid-old-ie.css">
+    <![endif]-->
+    <!--[if gt IE 8]><!-->
+        <link rel="stylesheet" href="css/main-grid.css">
+    <!--<![endif]-->
+    <!--[if lte IE 8]>
+        <link rel="stylesheet" href="css/layouts/tourbuddy-old-ie.css">
+    <![endif]-->
+    <!--[if gt IE 8]><!-->
+        <link rel="stylesheet" href="css/layouts/tourbuddy.css">
+    <!--<![endif]-->
+    <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+    <script>
+	   var currentlat;
+	   var currentlng;
+		var panorama;
+		var map;
+		var poly;
+		var routeMarkers = new Array();
+		var directionsDisplay;
+		var directionsService = new google.maps.DirectionsService();
+		var geocoder;
+		var infowindow = new google.maps.InfoWindow();
+		
+		function showNearbySights(position)
+		  {
+			  currentlat = position.coords.latitude;
+			  currentlng = position.coords.longitude;	
+			  var currentLocation = new google.maps.LatLng(currentlat, currentlng);
+			  var mapOptions = {
+				zoom: 11,
+				center: currentLocation
+			  }
+			  
+			  geocoder = new google.maps.Geocoder();
+			  directionsDisplay = new google.maps.DirectionsRenderer();
+			  map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+			  directionsDisplay.setMap(map);
+			  directionsDisplay.setPanel(document.getElementById('directions-panel'));
+
+			  var markerPos = new google.maps.LatLng(currentlat, currentlng);
+			  var marker = new google.maps.Marker({ position: markerPos,icon: {
+				  path: google.maps.SymbolPath.CIRCLE,
+				  scale: 10
+				}, map: map, title: "I am here" });
+
+				/* Query foursquare API for venue recommendations near the current location. */
+				var url = 'https://api.foursquare.com/v2/venues/explore?client_id=4SL20OZILKSDVOTWOGYB2MRH4KREAIB5RK5IIEHLDKWZ0OZO&client_secret=ZULYPUVFKIQOHZ0PRS1JL0JZ4ZBZ10H4ST5B1HAMIWYCGDGD&v=20130815&ll=' + currentlat + ',' + currentlng;
+				$.getJSON(url, {}, showVenues);
+				
+				codeLatLng(currentLocation, marker);
+		  }
+  		
+		function showVenues(data) {
+				  var resultContent = "";
+				  venues = data['response']['groups'][0]['items'];
+				  /* Place marker for each venue. */
+				  for (var i = 0; i < venues.length; i++) {
+					/* Get marker's location */
+					var lat = venues[i]['venue']['location']['lat'];
+					var lng = venues[i]['venue']['location']['lng'];
+					var latLng = new google.maps.LatLng(lat, lng);
+					
+					var iconUrl = venues[i]['venue']['categories'][0]['icon']['prefix'] + venues[i]['venue']['categories'][0]['icon']['suffix'];
+					var venueName = venues[i]['venue']['name'];
+					var location = venues[i].venue.location.address + " " + venues[i].venue.location.city + " " + venues[i].venue.location.state;
+					var contact = venues[i].venue.contact.formattedPhone;
+				    var marker = new google.maps.Marker(
+					{ 
+						position: latLng,
+						/*icon: {
+							  url: iconUrl,
+							  scaledSize: new google.maps.Size(32, 32)
+							},*/
+						map: map,
+						icon: 'http://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=' + (i+1) + '|FF0000|000000',
+						title: venueName
+					});
+					
+					var index = i + 1;
+					resultContent += "<li><div style=\"position:relative; margin-left: 2%;\">";
+					resultContent += "<div style=\"position:relative; font-size: 20px; color: #2398c9; padding-bottom: 10px;\">(" + index + ")  " + venueName + "</div>";
+					resultContent += "<div style=\"position:relative; font-size: 14px;\">" + location + "</div>";
+					resultContent += "<div style=\"position:relative; font-size: 14px;\">" + contact + "</div>";
+					resultContent += "</div></li>";
+					
+					//resultContent += "<li class=\"card\"><div class=\"venueIndex\">(" + index + ")</div><div class=\"venueDetails\"><div class=\"venueName\"><h2>" + venueName + "</h2></div></div></li>";
+				}
+				
+				var x = document.getElementById("venueList");
+				x.innerHTML = resultContent;
+		}
+
+	  function codeLatLng(latlng, marker) {
+		geocoder.geocode({'latLng': latlng}, function(results, status) {
+		  if (status == google.maps.GeocoderStatus.OK) {
+			if (results[1]) {
+			  /*map.setZoom(11);
+			  marker = new google.maps.Marker({
+				  position: latlng,
+				  map: map
+			  });*/
+			  infowindow.setContent(results[1].formatted_address);
+			  infowindow.open(map, marker);
+			  
+			  var x = document.getElementById("address");
+			  x.innerHTML = "Your current location is .... " + results[1].formatted_address;
+
+			}
+		  } else {
+			alert("Geocoder failed due to: " + status);
+		  }
+		});
+	  }
+  
+		function initialize() {
+		    /* HTML 5 geolocation. */
+			navigator.geolocation.getCurrentPosition(function(data) {
+			showNearbySights(data);
+		  });
+		}
+
+
+		google.maps.event.addDomListener(window, 'load', initialize);
+    </script>
+</head>
+<body>
+<div class="pure-menu pure-menu-open pure-menu-horizontal">
+    <a href="#" class="pure-menu-heading" style="color: rgb(35, 152, 201); font-weight: 900;">TOUR BUDDY !</a>
+    <ul>
+		<li class="pure-menu-selected"><a href="#">Home</a></li>
+		<li><a href="CreateRoute.html">Create Route</a></li>
+		<li><a href="ShopRoute.html">Shop</a></li>
+		<li><a href="About.html">About</a></li>
+    </ul>
+</div>
+
+<div class="banner" style="margin-bottom: 10px">
+    <h1 class="banner-head">
+        Improve your touring experience<br>
+        around the world.
+    </h1>
+</div>
+
+<div class="l-content">
+	<div>
+		<div id="address" style="margin-bottom:10px; margin-left: 1%;"></div>
+	</div>
+
+    <div class="pricing-tables pure-g">
+        <div class="pure-u-1 pure-u-med-1-3" style="width:40%">
+            <div class="pricing-table pricing-table-free">
+                <div class="pricing-table-header">
+                    <h2>Nearby Sights for current location</h2>
+                </div>
+
+                <ul id="venueList" class="pricing-table-list" style="height:400px;overflow:auto;text-align: left;">
+                    <li></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="pure-u-1 pure-u-med-1-3"  style="width:60%">
+            <div class="pricing-table pricing-table-biz pricing-table-selected">
+                <div class="pricing-table-header">
+                    <h2>Map</h2>
+                </div>
+				<div id="map-canvas" style="margin-left:0px;height:400px;position:relative;padding:0px"></div>
+
+            </div>
+        </div>
+  </div>
+</div>
+
+<div class="footer l-box">
+    <p>
+    </p>
+</div>
+</body>
+</html>

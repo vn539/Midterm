@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="A layout example that shows off a responsive pricing table.">
+    <title>Tour Route Buddy &ndash; better touring experience</title>
+	<link rel="stylesheet" href="http://yui.yahooapis.com/pure/0.4.2/pure.css">
+	<style>
+		.card { position: relative; }
+		.indexCol { float:left; position:relative; width: 30px; text-align: center; }
+		.routecontent { position:relative; width:60%; margin-left: 4%; padding-bottom: 10px; }
+		.routename { color: #2398c9;  width: 400px; margin-top: -20px; font-size: 14px;}
+		.routeinfo { position:relative; overflow: hidden; padding-bottom: 6px; }
+		.routemode { position:relative; overflow: hidden; padding-bottom: 6px; }
+		.routenumpoints { float:left; }
+		.routefree { float:right; color: white; border-radius: 4px; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2); background: rgb(28, 184, 65); }
+		.routedesc { position:relative; height: auto; font-size: 12px;}
+		.metaCol { position:relative; width:60%; margin-left: 4%; }
+		.routeimage { float: right; height: 128px; margin-top: -90px; overflow: hidden; position: relative; width: 128px; }
+		.gplus { width: 32px; height: 32px; float: right; }
+
+	</style>
+	
+    <!--[if lte IE 8]>
+        <link rel="stylesheet" href="css/main-grid-old-ie.css">
+    <![endif]-->
+    <!--[if gt IE 8]><!-->
+        <link rel="stylesheet" href="css/main-grid.css">
+    <!--<![endif]-->
+    <!--[if lte IE 8]>
+        <link rel="stylesheet" href="css/layouts/tourbuddy-old-ie.css">
+    <![endif]-->
+    <!--[if gt IE 8]><!-->
+        <link rel="stylesheet" href="css/layouts/tourbuddy.css">
+    <!--<![endif]-->
+    <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+	<script type="text/javascript" src="soapclient.js"></script>
+	<script language="JavaScript" type="text/javascript" src="http://vhss-d.oddcast.com/vocalware_embed_functions.php?acc=3314795&js=1"></script>
+    <script>
+		var currentlat;
+		var currentlng;
+		var panorama;
+		var map;
+		var poly;
+		var routeMarkers = new Array();
+		var directionsDisplay;
+		var directionsService = new google.maps.DirectionsService();
+		var routeList;
+		var currentRouteIndex = null;
+		var currentRoutePos = null;
+
+		var origin = null;
+		var destination = null;
+		var waypoints = [];
+		var markers = [];
+		var directionsVisible = false;
+	
+		function showRoadMap(position)
+		  {
+			  currentlat = position.coords.latitude;
+			  currentlng = position.coords.longitude;	
+			  var currentLocation = new google.maps.LatLng(currentlat, currentlng);
+			  var mapOptions = {
+				zoom: 11,
+				mapTypeId: google.maps.MapTypeId.ROADMAP,
+				center: currentLocation
+			  }
+			  
+			  directionsDisplay = new google.maps.DirectionsRenderer();
+			  map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+			  directionsDisplay.setMap(map);
+			  //directionsDisplay.setPanel(document.getElementById('directions-panel'));
+
+			  var markerPos = new google.maps.LatLng(currentlat, currentlng);
+			  var marker = new google.maps.Marker({ position: markerPos,icon: {
+				  path: google.maps.SymbolPath.CIRCLE,
+				  scale: 6
+				}, map: map, title: "I am here" });
+				
+				getRoutes();
+		  }
+
+		  function addMarker(latlng) {
+			markers.push(new google.maps.Marker({
+			  position: latlng, 
+			  map: map,
+			  icon: "http://maps.google.com/mapfiles/marker" + String.fromCharCode(markers.length + 65) + ".png"
+			}));    
+		  }
+
+		  function calcRoute(route) {
+			if (route == null) {
+			  alert("Invalid route");
+			  return;
+			}
+			
+			var mode;
+			switch (route.RouteMode) {
+			  case "bicycling":
+				mode = google.maps.DirectionsTravelMode.BICYCLING;
+				break;
+			  case "driving":
+				mode = google.maps.DirectionsTravelMode.DRIVING;
+				break;
+			  case "walking":
+				mode = google.maps.DirectionsTravelMode.WALKING;
+				break;
+			}
+
+			var lat = route.MarkerList[0].Lat;
+			var lng = route.MarkerList[0].Lng;		
+			var routeOrigin = new google.maps.LatLng(Number(lat), Number(lng));
+			
+			lat = route.MarkerList[route.MarkerList.length-1].Lat;
+			lng = route.MarkerList[route.MarkerList.length-1].Lng;		
+			var routeDestination = new google.maps.LatLng(Number(lat), Number(lng));
+
+			var routeWaypoints = [];
+			if (route.MarkerList.length > 2 )
+			{
+				for (var i = 1; i < route.MarkerList.length-1; i++) {
+					lat = route.MarkerList[i].Lat;
+					lng = route.MarkerList[i].Lng;		
+					var routeWaypoint = new google.maps.LatLng(Number(lat), Number(lng));
+					routeWaypoints.push({ location: routeWaypoint, stopover: true });
+				}
+			}
+			
+			var request = {
+				origin: routeOrigin,
+				destination: routeDestination,
+				waypoints: routeWaypoints,
+				travelMode: mode
+			};
+			
+			directionsService.route(request, function(response, status) {
+			  if (status == google.maps.DirectionsStatus.OK) {
+				directionsDisplay.setDirections(response);
+			  }
+			});
+			
+			//clearMarkers();
+			directionsVisible = true;
+		  }
+
+		  function updateMode() {
+			if (directionsVisible) {
+			  calcRoute();
+			}
+		  }
+		  
+		  function clearMarkers() {
+			for (var i = 0; i < markers.length; i++) {
+			  markers[i].setMap(null);
+			}
+		  }
+		  
+		  function clearWaypoints() {
+			markers = [];
+			origin = null;
+			destination = null;
+			waypoints = [];
+			directionsVisible = false;
+		  }
+
+		function reset() {
+			clearMarkers();
+			clearWaypoints();
+			directionsDisplay.setMap(null);
+			directionsDisplay.setPanel(null);
+			directionsDisplay = new google.maps.DirectionsRenderer();
+			directionsDisplay.setMap(map);
+			directionsDisplay.setPanel(document.getElementById("directions-panel"));    
+		}
+
+		function getRoutes() {
+			var url = "http://localhost:8086/aspnet_client/SoapService/WebService1.asmx";
+			var pl = new SOAPClientParameters();
+			//pl.add("routename", 'Olathe Route 1');
+		
+			SOAPClient.invoke(url, "GetRoutes", pl, true, getRoute_callBack);
+		}
+
+		function getRoute_callBack(r)
+		{
+			var resultContent = "";
+			routeList = r; // store the list of routes for rendering route
+	
+			for (var i = 0; i < r.length; i++) {
+				var routeInfo = r[i];
+				var routeName = routeInfo.RouteName;
+				var totalWaypoints = routeInfo.MarkerList.length;
+				var freetxt = (routeInfo.IsFree == true) ? "FREE" : "BUY";
+				
+				 resultContent += "<li class=\"card\">";
+				 resultContent += "<div class=\"indexCol\"><span>" + (i+1) + "</span></div>"; 
+				 resultContent += "<div class=\"routecontent\">";
+				 resultContent += "<div class=\"routename\"><h2>" + routeName + "</h2></div>";
+				 resultContent += "<div class=\"routeinfo\">";
+				 resultContent += "<span class=\"routenumpoints\">Total Waypoints: <b>" + totalWaypoints + "</b></span>";
+				 resultContent += "<span class=\" button-success routefree\">" + freetxt + "</span>";
+				 resultContent += "</div>";
+				 resultContent += "<div class=\"routemode\">";
+				 resultContent += "<span class=\"routenumpoints\">Mode: " + routeInfo.RouteMode + "</span>";
+				 resultContent += "</div>";		 
+				 resultContent += "<div class=\"routedesc\">";
+				 resultContent += "<span>" + routeInfo.Description + "</span>";
+				 resultContent += "</div>"; // routedesc
+				 resultContent += "</div>"; // routecontent
+				 resultContent += "<div class=\"routeimage\">";
+				 resultContent += "<img src=\"" + routeInfo.ImageUrl + "\"></img>";
+				 resultContent += "</div>"; // routeimage
+				 resultContent += "<div class=\"metaCol\">";
+				 resultContent += "<a onclick=\"showRoute('" + i + "')\" href=\"#\" class=\"pure-button pure-button-primary\" >Show Route</a>";
+				 
+				 resultContent += "<div class=\"gplus\">";
+				 resultContent += "<span><a href=\"#\"></a>";
+				 resultContent += "<img style=\"width:32px;height:32px;\" src=\"file://C:\\Vinu\\Midterm\\gplus.jpg\">";
+				 resultContent += "</span></div>"; // gplus
+				 resultContent += "</div>"; // metaCol
+				 resultContent += "</li>"; // li
+	/*<!--
+	<li class="card" style="position:relative;">
+		<div class="indexCol" style="float:left; position:relative; width: 30px;"><span>(1)</span></div>
+		<div class="routecontent" style="position:relative; width:70%; margin-left: 4%;">
+			<div class="routename" style="color: #2398c9;  width: 500px; margin-top: -20px;"><h2>Overland Park Route 1</h2></div>
+			<div class="routeinfo" style="position:relative; overflow: hidden;">
+				<span class="routenumpoints" style="float:left">Total Waypoints:3</span>
+				<span class="routefree" style="float:right">Free</span>
+			</div>
+			<div class="routemode">
+				<span class="routenumpoints">Mode: Driving</span>
+			</div>
+			<div class="routedesc" style="position:relative; height: auto;">
+				<span>here goes the route description. should wrap if too long.</span>
+			</div>
+		</div>
+		<div style="float: right; position: relative; height: 128px; width: 128px; margin-top: -90px; overflow: hidden;" class="routeimage">
+			<img src="file://C:\Vinu\Midterm\testimage.jpg"></img>
+		</div>
+		<div class="metaCol" style="position:relative; flot:right;">
+			<a onclick="showRoute('0')" href="#" class="pure-button pure-button-primary" routename="Overland Park Route 1">Show Route</a>
+			
+			<div style="width: 32px; height: 32px; float: right;" class="gplus">
+				<span><a href="#"></a>
+					<img style="width:32px;height:32px;" src="file://C:\\Vinu\\Midterm\\gplus.jpg">
+				</span>
+			</div>
+
+		</div>
+	</li>
+	-->*/
+			}
+			
+			var x = document.getElementById("routeList");
+			x.innerHTML = resultContent;
+		}			
+		
+		function showRoute(routeIndex) {
+			currentRouteIndex = parseInt(routeIndex);
+			calcRoute(routeList[currentRouteIndex]);
+		}
+
+		// route navigation
+		function navStart() {
+			if (currentRouteIndex == null)
+			{
+				alert("Please select a route from the list to start navigation.");
+				return;
+			}
+			
+			var route = routeList[currentRouteIndex];
+			if (route.IsFree != true)
+			{
+				alert("The selected route is not free. Please select a free route to navigate.");
+				return;
+			}
+
+			currentRoutePos = 0;
+			var routeOrigin = new google.maps.LatLng(Number(route.MarkerList[0].Lat), Number(route.MarkerList[0].Lng));
+			map.panTo(routeOrigin);
+			map.setCenter(routeOrigin);
+			map.setZoom(15);
+		}
+
+		function navNext() {
+			if (currentRouteIndex == null)
+			{
+				alert("Please select a route from the list to start navigation.");
+				return;
+			}
+			
+			var route = routeList[currentRouteIndex];
+			if (route.IsFree != true)
+			{
+				alert("The selected route is not free. Please select a free route to navigate.");
+				return;
+			}
+
+			currentRoutePos += 1;
+			if (currentRoutePos == route.MarkerList.length)
+			{
+				currentRoutePos -= 1;
+			}
+			var pos = new google.maps.LatLng(Number(route.MarkerList[currentRoutePos].Lat), Number(route.MarkerList[currentRoutePos].Lng));
+			map.panTo(pos);
+			map.setCenter(pos);
+		}
+		
+		function navPrevious() {
+			if (currentRouteIndex == null)
+			{
+				alert("Please select a route from the list to start navigation.");
+				return;
+			}
+			
+			var route = routeList[currentRouteIndex];
+			if (route.IsFree != true)
+			{
+				alert("The selected route is not free. Please select a free route to navigate.");
+				return;
+			}
+
+			currentRoutePos -= 1;
+			if (currentRoutePos == -1)
+			{
+				currentRoutePos += 1;
+			}
+			var pos = new google.maps.LatLng(Number(route.MarkerList[currentRoutePos].Lat), Number(route.MarkerList[currentRoutePos].Lng));
+			map.panTo(pos);
+			map.setCenter(pos);
+		}
+
+		function initialize() {
+		    /* HTML 5 geolocation. */
+			navigator.geolocation.getCurrentPosition(function(data) {
+			showRoadMap(data);
+		  });
+		}
+
+		google.maps.event.addDomListener(window, 'load', initialize);
+    </script>
+</head>
+<body>
+<!-- This function call needs to be in or after the body tag -->
+<!--
+	<script language="JavaScript" type="text/javascript">
+		AC_Vocalware_Embed(3314795, 1, 1, '', 1, 1, 2292375, 0, 1, 0, 'a7deb48b183402c52f1fad0c2963d259', 9);
+	</script>
+	<a style=" font-size:120%;" href="javascript:sayText('I can say anything you like, in over 25 languages',3,1,3);">Play Audio</a>
+	-->
+<div class="pure-menu pure-menu-open pure-menu-horizontal">
+    <a href="#" class="pure-menu-heading" style="color: rgb(35, 152, 201); font-weight: 900;">TOUR BUDDY !</a>
+    <ul>
+		<li><a href="Home.html">Home</a></li>
+		<li><a href="CreateRoute.html">Create Route</a></li>
+		<li class="pure-menu-selected"><a href="#">Shop</a></li>
+		<li><a href="About.html">About</a></li>
+    </ul>
+</div>
+
+<div class="l-content">
+    <div class="pricing-tables pure-g">
+        <div class="pure-u-1 pure-u-med-1-3" style="width:40%">
+            <div class="pricing-table pricing-table-free">
+                <div class="pricing-table-header">
+                    <h2>List of Routes</h2>
+                </div>
+                <ul id="routeList" class="pricing-table-list" style="height:470px;overflow:auto;text-align: left;">
+                    <li></li>
+                </ul>
+
+			</div>
+        </div>
+
+        <div class="pure-u-1 pure-u-med-1-3"  style="width:60%">
+            <div class="pricing-table pricing-table-biz pricing-table-selected" style="padding: 0;">
+                <div class="pricing-table-header">
+                    <h2>Map</h2>
+                </div>
+				<div id="map-canvas" style="margin-left:0px;height:470px;position:relative;padding:0px;"></div>
+
+				<div id="map-navigate" style="height:50px; margin-left:0px; position: inherit;background: none repeat scroll 0 0 #2C4985;">
+					<button class="pure-button pure-button-primary" style="margin-top: 8px;" onclick="navStart()">Start Navigate</button>
+					<button class="pure-button" style="margin-top: 8px;" onclick="navPrevious()">Previous</button>
+					<button class="pure-button" style="margin-top: 8px;" onclick="navNext()">Next</button>
+				</div>
+
+            </div>
+        </div>
+		<!-- -->
+  </div> <!-- end pricing-tables -->
+
+</div> <!-- end l-content -->
+
+<div class="footer l-box">
+    <p>
+    </p>
+</div>
+</body>
+</html>
